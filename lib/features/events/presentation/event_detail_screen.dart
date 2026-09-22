@@ -22,61 +22,71 @@ class EventDetailScreen extends ConsumerWidget {
       body: AsyncValueView(
         value: eventAsync,
         onRetry: () => ref.invalidate(eventDetailProvider(eventId)),
-        data: (event) {
-          final isMember =
-              (membershipsAsync.valueOrNull ?? const <String>{}).contains(event.id);
-          final dateFormat = DateFormat('EEE, MMM d, yyyy');
-          final timeFormat = DateFormat('h:mm a');
+        data: (event) => AsyncValueView(
+          value: membershipsAsync,
+          onRetry: () => ref.invalidate(myMembershipsProvider),
+          data: (memberIds) {
+            final isMember = memberIds.contains(event.id);
+            final dateFormat = DateFormat('EEE, MMM d, yyyy');
+            final timeFormat = DateFormat('h:mm a');
 
-          return ListView(
-            padding: const EdgeInsets.all(20),
-            children: [
-              Text(
-                event.title,
-                style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 12),
-              _DetailRow(
-                icon: Icons.calendar_today_outlined,
-                text: dateFormat.format(event.startsAt),
-              ),
-              const SizedBox(height: 8),
-              _DetailRow(
-                icon: Icons.schedule,
-                text:
-                    '${timeFormat.format(event.startsAt)} – ${timeFormat.format(event.endsAt)}',
-              ),
-              const SizedBox(height: 8),
-              _DetailRow(icon: Icons.place_outlined, text: event.location),
-              if (event.description != null && event.description!.trim().isNotEmpty) ...[
-                const SizedBox(height: 16),
-                Text(event.description!, style: const TextStyle(color: Colors.black87)),
-              ],
-              const SizedBox(height: 24),
-              if (!isMember)
-                Container(
-                  padding: const EdgeInsets.all(14),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFFFF7ED),
-                    borderRadius: BorderRadius.circular(10),
+            return ListView(
+              padding: const EdgeInsets.all(20),
+              children: [
+                Text(
+                  event.title,
+                  style: const TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.bold,
                   ),
-                  child: const Text(
-                    'Join this shift from the events list to clock in and chat with the team.',
-                    style: TextStyle(color: Color(0xFF9A3412)),
-                  ),
-                )
-              else ...[
-                AttendancePanel(eventId: event.id),
-                const SizedBox(height: 16),
-                OutlinedButton.icon(
-                  onPressed: () => context.push('/events/${event.id}/chat'),
-                  icon: const Icon(Icons.chat_bubble_outline),
-                  label: const Text('Open Team Chat'),
                 ),
+                const SizedBox(height: 12),
+                _DetailRow(
+                  icon: Icons.calendar_today_outlined,
+                  text: dateFormat.format(event.startsAt),
+                ),
+                const SizedBox(height: 8),
+                _DetailRow(
+                  icon: Icons.schedule,
+                  text:
+                      '${timeFormat.format(event.startsAt)} – ${timeFormat.format(event.endsAt)}',
+                ),
+                const SizedBox(height: 8),
+                _DetailRow(icon: Icons.place_outlined, text: event.location),
+                if (event.description != null &&
+                    event.description!.trim().isNotEmpty) ...[
+                  const SizedBox(height: 16),
+                  Text(
+                    event.description!,
+                    style: const TextStyle(color: Colors.black87),
+                  ),
+                ],
+                const SizedBox(height: 24),
+                if (!isMember)
+                  Container(
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFFF7ED),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Text(
+                      'Join this shift from the events list to clock in and chat with the team.',
+                      style: TextStyle(color: Color(0xFF9A3412)),
+                    ),
+                  )
+                else ...[
+                  AttendancePanel(eventId: event.id),
+                  const SizedBox(height: 16),
+                  OutlinedButton.icon(
+                    onPressed: () => context.push('/events/${event.id}/chat'),
+                    icon: const Icon(Icons.chat_bubble_outline),
+                    label: const Text('Open Team Chat'),
+                  ),
+                ],
               ],
-            ],
-          );
-        },
+            );
+          },
+        ),
       ),
     );
   }
