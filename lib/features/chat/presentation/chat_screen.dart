@@ -52,9 +52,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
           .sendMessage(eventId: widget.eventId, body: text);
     } on AppFailure catch (error) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(error.message)),
-        );
+        if (_messageController.text.isEmpty) _messageController.text = text;
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(error.message)));
       }
     } finally {
       if (mounted) setState(() => _isSending = false);
@@ -81,7 +81,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
           Expanded(
             child: AsyncValueView(
               value: messagesAsync,
-              onRetry: () => ref.invalidate(chatControllerProvider(widget.eventId)),
+              onRetry: () =>
+                  ref.invalidate(chatControllerProvider(widget.eventId)),
               data: (messages) {
                 if (messages.isEmpty) {
                   return const EmptyState(
@@ -119,7 +120,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                       textInputAction: TextInputAction.send,
                       minLines: 1,
                       maxLines: 4,
-                      decoration: const InputDecoration(hintText: 'Message the team…'),
+                      decoration: const InputDecoration(
+                        hintText: 'Message the team…',
+                      ),
                       onSubmitted: (_) => _send(),
                     ),
                   ),
@@ -148,7 +151,11 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 }
 
 class _MessageBubble extends StatelessWidget {
-  const _MessageBubble({required this.body, required this.time, required this.isMine});
+  const _MessageBubble({
+    required this.body,
+    required this.time,
+    required this.isMine,
+  });
 
   final String body;
   final String time;
