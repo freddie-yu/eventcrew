@@ -33,8 +33,9 @@ class EventListScreen extends ConsumerWidget {
 
     Future<void> handleJoin(String eventId) async {
       ref.read(joiningEventIdProvider.notifier).state = eventId;
-      final success =
-          await ref.read(joinEventControllerProvider.notifier).join(eventId);
+      final success = await ref
+          .read(joinEventControllerProvider.notifier)
+          .join(eventId);
       ref.read(joiningEventIdProvider.notifier).state = null;
       if (success && context.mounted) {
         context.push('/events/$eventId');
@@ -57,39 +58,41 @@ class EventListScreen extends ConsumerWidget {
         child: AsyncValueView(
           value: eventsAsync,
           onRetry: () => ref.invalidate(upcomingEventsProvider),
-          data: (events) {
-            if (events.isEmpty) {
-              return ListView(
-                children: const [
-                  SizedBox(height: 120),
-                  EmptyState(
-                    icon: Icons.event_busy_outlined,
-                    title: 'No upcoming events',
-                    message: 'Check back later for new shifts.',
-                  ),
-                ],
-              );
-            }
-
-            final memberIds = membershipsAsync.valueOrNull ?? <String>{};
-
-            return ListView.separated(
-              padding: const EdgeInsets.all(16),
-              itemCount: events.length,
-              separatorBuilder: (_, __) => const SizedBox(height: 12),
-              itemBuilder: (context, index) {
-                final event = events[index];
-                final isMember = memberIds.contains(event.id);
-                return EventCard(
-                  event: event,
-                  isMember: isMember,
-                  isJoining: joiningEventId == event.id,
-                  onTap: () => context.push('/events/${event.id}'),
-                  onJoin: () => handleJoin(event.id),
+          data: (events) => AsyncValueView(
+            value: membershipsAsync,
+            onRetry: () => ref.invalidate(myMembershipsProvider),
+            data: (memberIds) {
+              if (events.isEmpty) {
+                return ListView(
+                  children: const [
+                    SizedBox(height: 120),
+                    EmptyState(
+                      icon: Icons.event_busy_outlined,
+                      title: 'No upcoming events',
+                      message: 'Check back later for new shifts.',
+                    ),
+                  ],
                 );
-              },
-            );
-          },
+              }
+
+              return ListView.separated(
+                padding: const EdgeInsets.all(16),
+                itemCount: events.length,
+                separatorBuilder: (_, __) => const SizedBox(height: 12),
+                itemBuilder: (context, index) {
+                  final event = events[index];
+                  final isMember = memberIds.contains(event.id);
+                  return EventCard(
+                    event: event,
+                    isMember: isMember,
+                    isJoining: joiningEventId == event.id,
+                    onTap: () => context.push('/events/${event.id}'),
+                    onJoin: () => handleJoin(event.id),
+                  );
+                },
+              );
+            },
+          ),
         ),
       ),
     );
