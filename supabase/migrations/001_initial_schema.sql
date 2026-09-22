@@ -120,6 +120,38 @@ create table if not exists public.time_entries (
   constraint time_entries_order check (clock_out is null or clock_out >= clock_in)
 );
 
+-- Attendance timestamps are assigned by PostgreSQL. A client may only
+-- close its own active entry; it cannot rewrite or reopen attendance.
+create or replace function public.guard_time_entry()
+returns trigger
+language plpgsql
+set search_path = public
+as $$
+begin
+  if tg_op = 'INSERT' then
+    new.clock_in := now();
+    new.clock_out := null;
+    new.created_at := now();
+  else
+    if old.clock_out is not null
+       or new.id is distinct from old.id
+       or new.event_id is distinct from old.event_id
+       or new.user_id is distinct from old.user_id
+       or new.clock_in is distinct from old.clock_in
+       or new.created_at is distinct from old.created_at then
+      raise exception 'time entry cannot be changed';
+    end if;
+    new.clock_out := now();
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists guard_time_entry on public.time_entries;
+create trigger guard_time_entry
+  before insert or update on public.time_entries
+  for each row execute function public.guard_time_entry();
+
 -- Core invariant: at most one *active* (not clocked out) time entry per
 -- user/event. Enforced in the database, not just the client.
 create unique index if not exists one_active_time_entry_per_user_event
