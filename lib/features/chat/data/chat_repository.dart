@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/error/app_failure.dart';
@@ -51,11 +53,12 @@ class ChatRepository {
   /// [onInsert] for each newly inserted message. Callers own the returned
   /// channel and must close it (via `SupabaseClient.removeChannel`) when
   /// finished, so no global "all events" subscription is ever left open.
-  RealtimeChannel subscribeToNewMessages({
+  ({RealtimeChannel channel, Future<void> ready}) subscribeToNewMessages({
     required String eventId,
     required void Function(ChatMessage message) onInsert,
   }) {
     final channel = _client.channel('messages:event:$eventId');
+    final ready = Completer<void>();
     channel.onPostgresChanges(
       event: PostgresChangeEvent.insert,
       schema: 'public',
@@ -67,7 +70,17 @@ class ChatRepository {
       ),
       callback: (payload) => onInsert(ChatMessage.fromMap(payload.newRecord)),
     );
-    channel.subscribe();
-    return channel;
+    channel.subscribe((status, error) {
+      if (ready.isCompleted) return;
+      if (status == RealtimeSubscribeStatus.subscribed) {
+        ready.complete();
+      } else if (status == RealtimeSubscribeStatus.channelError ||
+          status == RealtimeSubscribeStatus.timedOut) {
+        ready.completeError(
+          const AppFailure('Could not connect to team chat.'),
+        );
+      }
+    });
+    return (channel: channel, ready: ready.future);
   }
 }
