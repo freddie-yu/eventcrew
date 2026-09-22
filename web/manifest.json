@@ -1,0 +1,12 @@
+{
+    "name": "EventCrew",
+    "short_name": "EventCrew",
+    "start_url": ".",
+    "display": "standalone",
+    "background_color": "#F5F6FA",
+    "theme_color": "#2757F2",
+    "description": "Flutter + Supabase staffing demo.",
+    "orientation": "portrait-primary",
+    "prefer_related_applications": false,
+    "icons": []
+}
