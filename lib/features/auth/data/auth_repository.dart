@@ -20,7 +20,9 @@ class AuthRepository {
     try {
       await _client.auth.signInWithPassword(email: email, password: password);
     } on AuthException catch (_) {
-      throw const AppFailure('Incorrect email or password.');
+      throw const AppFailure(
+        'Could not sign in. Check your email and password and try again.',
+      );
     } catch (_) {
       throw const AppFailure('Could not sign in. Please try again.');
     }
