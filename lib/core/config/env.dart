@@ -1,11 +1,8 @@
-/// Compile-time Supabase configuration.
+/// Compile-time application configuration.
 ///
-/// Values are read via `String.fromEnvironment`, which only sees values
-/// supplied at build/run time through `--dart-define` (or
-/// `--dart-define-from-file`). Nothing here is a secret checked into the
-/// repo — the anon key is safe to ship to clients by design, because
-/// Postgres Row Level Security (not this key) is what actually protects
-/// data. See supabase/migrations/001_initial_schema.sql.
+/// Supabase is required. Firebase Messaging is optional so the Web portfolio
+/// demo can run without mobile push credentials while native builds can enable
+/// push with the same codebase.
 class Env {
   const Env._();
 
@@ -13,8 +10,27 @@ class Env {
   static const String supabaseAnonKey =
       String.fromEnvironment('SUPABASE_ANON_KEY');
 
-  /// True only when both compile-time values were actually supplied. The
-  /// app must never silently run against empty/placeholder credentials.
+  static const String firebaseApiKey =
+      String.fromEnvironment('FIREBASE_API_KEY');
+  static const String firebaseAppId =
+      String.fromEnvironment('FIREBASE_APP_ID');
+  static const String firebaseMessagingSenderId =
+      String.fromEnvironment('FIREBASE_MESSAGING_SENDER_ID');
+  static const String firebaseProjectId =
+      String.fromEnvironment('FIREBASE_PROJECT_ID');
+  static const String firebaseAuthDomain =
+      String.fromEnvironment('FIREBASE_AUTH_DOMAIN');
+  static const String firebaseStorageBucket =
+      String.fromEnvironment('FIREBASE_STORAGE_BUCKET');
+  static const String firebaseVapidKey =
+      String.fromEnvironment('FIREBASE_VAPID_KEY');
+
   static bool get isConfigured =>
       supabaseUrl.isNotEmpty && supabaseAnonKey.isNotEmpty;
+
+  static bool get isFirebaseConfigured =>
+      firebaseApiKey.isNotEmpty &&
+      firebaseAppId.isNotEmpty &&
+      firebaseMessagingSenderId.isNotEmpty &&
+      firebaseProjectId.isNotEmpty;
 }
