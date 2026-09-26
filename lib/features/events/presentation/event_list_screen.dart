@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/theme/app_theme.dart';
 import '../../../shared/widgets/async_value_view.dart';
 import '../../../shared/widgets/empty_state.dart';
 import '../../auth/presentation/auth_controller.dart';
+import '../data/event_model.dart';
 import 'events_providers.dart';
 import 'widgets/event_card.dart';
 
@@ -33,17 +35,22 @@ class EventListScreen extends ConsumerWidget {
 
     Future<void> handleJoin(String eventId) async {
       ref.read(membershipMutationEventIdProvider.notifier).state = eventId;
-      final success =
+      final status =
           await ref.read(joinEventControllerProvider.notifier).join(eventId);
       ref.read(membershipMutationEventIdProvider.notifier).state = null;
-      if (success && context.mounted) {
+      if (status != null && context.mounted) {
+        final message = status == MembershipStatus.waitlisted
+            ? 'Shift is full — you joined the waitlist.'
+            : 'Shift confirmed.';
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(message)));
         context.push('/events/$eventId');
       }
     }
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Upcoming Events'),
+        title: const Text('Upcoming Shifts'),
         actions: [
           IconButton(
             tooltip: 'Sign out',
@@ -60,7 +67,7 @@ class EventListScreen extends ConsumerWidget {
           data: (events) => AsyncValueView(
             value: membershipsAsync,
             onRetry: () => ref.invalidate(myMembershipsProvider),
-            data: (memberIds) {
+            data: (memberships) {
               if (events.isEmpty) {
                 return ListView(
                   children: const [
@@ -74,10 +81,11 @@ class EventListScreen extends ConsumerWidget {
                 );
               }
 
-              final myShifts =
-                  events.where((event) => memberIds.contains(event.id)).toList();
+              final myShifts = events
+                  .where((event) => memberships.containsKey(event.id))
+                  .toList();
               final available = events
-                  .where((event) => !memberIds.contains(event.id))
+                  .where((event) => !memberships.containsKey(event.id))
                   .toList();
 
               return ListView(
@@ -86,15 +94,17 @@ class EventListScreen extends ConsumerWidget {
                   if (myShifts.isNotEmpty) ...[
                     const _SectionHeader(
                       title: 'My shifts',
-                      subtitle: 'Confirmed assignments',
+                      subtitle: 'Confirmed & waitlisted',
                     ),
                     const SizedBox(height: 10),
                     for (var i = 0; i < myShifts.length; i++) ...[
                       EventCard(
                         event: myShifts[i],
                         isMember: true,
+                        membershipStatus: memberships[myShifts[i].id],
                         isJoining: false,
-                        onTap: () => context.push('/events/${myShifts[i].id}'),
+                        onTap: () =>
+                            context.push('/events/${myShifts[i].id}'),
                         onJoin: () {},
                       ),
                       if (i != myShifts.length - 1)
@@ -104,7 +114,7 @@ class EventListScreen extends ConsumerWidget {
                   ],
                   const _SectionHeader(
                     title: 'Available shifts',
-                    subtitle: 'Open events you can join',
+                    subtitle: 'Open roles & waitlists',
                   ),
                   const SizedBox(height: 10),
                   if (available.isEmpty)
@@ -122,7 +132,8 @@ class EventListScreen extends ConsumerWidget {
                         event: available[i],
                         isMember: false,
                         isJoining: mutatingEventId == available[i].id,
-                        onTap: () => context.push('/events/${available[i].id}'),
+                        onTap: () =>
+                            context.push('/events/${available[i].id}'),
                         onJoin: () => handleJoin(available[i].id),
                       ),
                       if (i != available.length - 1)
@@ -152,12 +163,19 @@ class _SectionHeader extends StatelessWidget {
         Expanded(
           child: Text(
             title,
-            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+            style: const TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w700,
+              color: AppTheme.textPrimary,
+            ),
           ),
         ),
         Text(
           subtitle,
-          style: const TextStyle(fontSize: 12, color: Colors.black45),
+          style: const TextStyle(
+            fontSize: 12,
+            color: AppTheme.textSecondary,
+          ),
         ),
       ],
     );
