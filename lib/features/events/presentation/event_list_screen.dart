@@ -15,7 +15,7 @@ class EventListScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final eventsAsync = ref.watch(upcomingEventsProvider);
     final membershipsAsync = ref.watch(myMembershipsProvider);
-    final joiningEventId = ref.watch(joiningEventIdProvider);
+    final mutatingEventId = ref.watch(membershipMutationEventIdProvider);
 
     ref.listen(joinEventControllerProvider, (previous, next) {
       if (next.hasError) {
@@ -32,11 +32,10 @@ class EventListScreen extends ConsumerWidget {
     }
 
     Future<void> handleJoin(String eventId) async {
-      ref.read(joiningEventIdProvider.notifier).state = eventId;
-      final success = await ref
-          .read(joinEventControllerProvider.notifier)
-          .join(eventId);
-      ref.read(joiningEventIdProvider.notifier).state = null;
+      ref.read(membershipMutationEventIdProvider.notifier).state = eventId;
+      final success =
+          await ref.read(joinEventControllerProvider.notifier).join(eventId);
+      ref.read(membershipMutationEventIdProvider.notifier).state = null;
       if (success && context.mounted) {
         context.push('/events/$eventId');
       }
@@ -75,26 +74,92 @@ class EventListScreen extends ConsumerWidget {
                 );
               }
 
-              return ListView.separated(
+              final myShifts =
+                  events.where((event) => memberIds.contains(event.id)).toList();
+              final available = events
+                  .where((event) => !memberIds.contains(event.id))
+                  .toList();
+
+              return ListView(
                 padding: const EdgeInsets.all(16),
-                itemCount: events.length,
-                separatorBuilder: (_, __) => const SizedBox(height: 12),
-                itemBuilder: (context, index) {
-                  final event = events[index];
-                  final isMember = memberIds.contains(event.id);
-                  return EventCard(
-                    event: event,
-                    isMember: isMember,
-                    isJoining: joiningEventId == event.id,
-                    onTap: () => context.push('/events/${event.id}'),
-                    onJoin: () => handleJoin(event.id),
-                  );
-                },
+                children: [
+                  if (myShifts.isNotEmpty) ...[
+                    const _SectionHeader(
+                      title: 'My shifts',
+                      subtitle: 'Confirmed assignments',
+                    ),
+                    const SizedBox(height: 10),
+                    for (var i = 0; i < myShifts.length; i++) ...[
+                      EventCard(
+                        event: myShifts[i],
+                        isMember: true,
+                        isJoining: false,
+                        onTap: () => context.push('/events/${myShifts[i].id}'),
+                        onJoin: () {},
+                      ),
+                      if (i != myShifts.length - 1)
+                        const SizedBox(height: 12),
+                    ],
+                    const SizedBox(height: 24),
+                  ],
+                  const _SectionHeader(
+                    title: 'Available shifts',
+                    subtitle: 'Open events you can join',
+                  ),
+                  const SizedBox(height: 10),
+                  if (available.isEmpty)
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 24),
+                      child: EmptyState(
+                        icon: Icons.task_alt_outlined,
+                        title: 'No open shifts',
+                        message: 'You have joined every upcoming event.',
+                      ),
+                    )
+                  else
+                    for (var i = 0; i < available.length; i++) ...[
+                      EventCard(
+                        event: available[i],
+                        isMember: false,
+                        isJoining: mutatingEventId == available[i].id,
+                        onTap: () => context.push('/events/${available[i].id}'),
+                        onJoin: () => handleJoin(available[i].id),
+                      ),
+                      if (i != available.length - 1)
+                        const SizedBox(height: 12),
+                    ],
+                ],
               );
             },
           ),
         ),
       ),
+    );
+  }
+}
+
+class _SectionHeader extends StatelessWidget {
+  const _SectionHeader({required this.title, required this.subtitle});
+
+  final String title;
+  final String subtitle;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: [
+        Expanded(
+          child: Text(
+            title,
+            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+          ),
+        ),
+        Text(
+          subtitle,
+          style: const TextStyle(fontSize: 12, color: Colors.black45),
+        ),
+      ],
     );
   }
 }
