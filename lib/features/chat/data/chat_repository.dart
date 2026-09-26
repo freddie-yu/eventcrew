@@ -9,21 +9,32 @@ class ChatRepository {
   ChatRepository(this._client);
 
   final SupabaseClient _client;
+  final Map<String, Map<String, dynamic>> _profileCache = {};
 
   static const int historyLimit = 50;
 
-  /// The latest [historyLimit] messages for the event, returned oldest
-  /// first so they can be rendered directly top-to-bottom.
   Future<List<ChatMessage>> fetchRecentMessages(String eventId) async {
     try {
       final rows = await _client
           .from('messages')
-          .select()
+          .select(
+            'id,event_id,user_id,body,created_at,'
+            'profiles!messages_user_id_fkey(full_name,avatar_url,role)',
+          )
           .eq('event_id', eventId)
           .order('created_at', ascending: false)
           .limit(historyLimit);
+
       final messages = (rows as List)
-          .map((row) => ChatMessage.fromMap(row as Map<String, dynamic>))
+          .map((row) {
+            final map = row as Map<String, dynamic>;
+            final profile = map['profiles'];
+            if (profile is Map) {
+              _profileCache[map['user_id'] as String] =
+                  Map<String, dynamic>.from(profile);
+            }
+            return ChatMessage.fromMap(map);
+          })
           .toList();
       return messages.reversed.toList();
     } catch (_) {
@@ -49,10 +60,25 @@ class ChatRepository {
     }
   }
 
-  /// Opens a realtime channel scoped to `event_id = eventId`, invoking
-  /// [onInsert] for each newly inserted message. Callers own the returned
-  /// channel and must close it (via `SupabaseClient.removeChannel`) when
-  /// finished, so no global "all events" subscription is ever left open.
+  Future<ChatMessage> _hydrateRealtimeMessage(
+    Map<String, dynamic> row,
+  ) async {
+    final userId = row['user_id'] as String;
+    var profile = _profileCache[userId];
+
+    if (profile == null) {
+      final fetched = await _client
+          .from('profiles')
+          .select('full_name,avatar_url,role')
+          .eq('id', userId)
+          .single();
+      profile = Map<String, dynamic>.from(fetched);
+      _profileCache[userId] = profile;
+    }
+
+    return ChatMessage.fromMap({...row, 'profiles': profile});
+  }
+
   ({RealtimeChannel channel, Future<void> ready}) subscribeToNewMessages({
     required String eventId,
     required void Function(ChatMessage message) onInsert,
@@ -68,7 +94,13 @@ class ChatRepository {
         column: 'event_id',
         value: eventId,
       ),
-      callback: (payload) => onInsert(ChatMessage.fromMap(payload.newRecord)),
+      callback: (payload) {
+        unawaited(
+          _hydrateRealtimeMessage(payload.newRecord)
+              .then(onInsert)
+              .catchError((Object _, StackTrace __) {}),
+        );
+      },
     );
     channel.subscribe((status, error) {
       if (ready.isCompleted) return;
