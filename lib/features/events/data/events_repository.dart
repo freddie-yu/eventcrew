@@ -55,9 +55,9 @@ class EventsRepository {
   /// Joins the current user to an event.
   ///
   /// Duplicate joins are prevented by the `unique(event_id, user_id)`
-  /// constraint in the database (see the migration); the resulting
-  /// unique-violation is mapped to a friendly message here rather than
-  /// surfaced as a raw Postgres error.
+  /// constraint in the database. The RLS policy also rejects events that
+  /// have already ended, so business rules are enforced server-side rather
+  /// than trusting a stale client.
   Future<void> joinEvent({
     required String eventId,
     required String userId,
@@ -75,6 +75,37 @@ class EventsRepository {
       );
     } catch (_) {
       throw const AppFailure('Could not join this shift. Please try again.');
+    }
+  }
+
+  /// Leaves a shift the current user previously joined.
+  ///
+  /// The database policy refuses deletion while an active time entry exists,
+  /// preventing a worker from disappearing from a shift while still clocked
+  /// in even if two clients race or the UI is stale.
+  Future<void> leaveEvent({
+    required String eventId,
+    required String userId,
+  }) async {
+    try {
+      final deleted = await _client
+          .from('event_members')
+          .delete()
+          .eq('event_id', eventId)
+          .eq('user_id', userId)
+          .select('id');
+
+      if ((deleted as List).isEmpty) {
+        throw const AppFailure(
+          'Could not leave this shift. Clock out first, then try again.',
+        );
+      }
+    } on AppFailure {
+      rethrow;
+    } catch (_) {
+      throw const AppFailure(
+        'Could not leave this shift. Clock out first, then try again.',
+      );
     }
   }
 }
