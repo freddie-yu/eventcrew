@@ -1,53 +1,65 @@
--- Sample non-auth seed data for local development / demos.
--- Run after the migration.
---
--- This intentionally does NOT create auth users or rows in
--- event_members / time_entries / messages: those are user-owned and
--- protected by RLS, so they should be created by signing in through the
--- app as a real Supabase Auth user, not inserted directly with an
--- invented UUID.
+-- Repeatable demo seed data.
+-- Re-running this file refreshes event dates relative to "now" so the public
+-- portfolio demo never ages into an empty-state-only experience.
 
-insert into public.events (id, title, description, location, starts_at, ends_at)
+insert into public.events (
+  id,
+  title,
+  description,
+  location,
+  starts_at,
+  ends_at,
+  capacity
+)
 values
   (
     '11111111-1111-1111-1111-111111111111',
     'Riverside Music Festival — Load In',
     'Stage and vendor load-in crew. Steel-toe boots required.',
     'Riverside Park, Austin, TX',
-    now() + interval '2 days' + interval '8 hours',
-    now() + interval '2 days' + interval '16 hours'
+    date_trunc('day', now()) + interval '2 days 8 hours',
+    date_trunc('day', now()) + interval '2 days 16 hours',
+    1
   ),
   (
     '22222222-2222-2222-2222-222222222222',
     'Downtown Marathon — Water Station 4',
     'Staff and restock the mile-14 water station.',
     'Congress Ave & 6th St, Austin, TX',
-    now() + interval '5 days' + interval '6 hours',
-    now() + interval '5 days' + interval '12 hours'
+    date_trunc('day', now()) + interval '5 days 6 hours',
+    date_trunc('day', now()) + interval '5 days 12 hours',
+    4
   ),
   (
     '33333333-3333-3333-3333-333333333333',
     'Tech Conference — Registration Desk',
     'Badge check-in and attendee support for day one.',
     'Austin Convention Center, Hall 3',
-    now() + interval '9 days' + interval '7 hours',
-    now() + interval '9 days' + interval '15 hours'
+    date_trunc('day', now()) + interval '9 days 7 hours',
+    date_trunc('day', now()) + interval '9 days 15 hours',
+    8
   ),
   (
     '44444444-4444-4444-4444-444444444444',
     'Stadium Concert — Merch Booth',
     'Sell and restock merchandise before and during the show.',
     'Moody Center, Austin, TX',
-    now() + interval '12 days' + interval '17 hours',
-    now() + interval '12 days' + interval '23 hours'
+    date_trunc('day', now()) + interval '12 days 17 hours',
+    date_trunc('day', now()) + interval '12 days 23 hours',
+    12
   )
-on conflict (id) do nothing;
+on conflict (id) do update set
+  title = excluded.title,
+  description = excluded.description,
+  location = excluded.location,
+  starts_at = excluded.starts_at,
+  ends_at = excluded.ends_at,
+  capacity = excluded.capacity;
 
--- To try the full flow locally:
---   1. Create a user (Supabase Studio -> Authentication -> Add user, or
---      supabase.auth.signUp from the app if you add a sign-up flow).
---   2. Sign in through the app.
---   3. Join one of the seeded events, clock in/out, and send chat
---      messages. The event_members / time_entries / messages rows are
---      created by the app itself, under RLS, as that signed-in user —
---      not by this seed file.
+-- Recommended demo setup:
+--   demo.staff1@example.com  -> joins Riverside first -> Confirmed
+--   demo.staff2@example.com  -> joins Riverside second -> Waitlisted
+--
+-- When staff1 leaves the event, leave_event() promotes staff2 automatically.
+-- Create real Auth users through Supabase Authentication so profiles and RLS
+-- are exercised exactly as they are in production.
