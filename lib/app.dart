@@ -35,23 +35,27 @@ class _MissingConfigScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFF4F5F7),
+    return const Scaffold(
+      backgroundColor: Color(0xFFF4F5F7),
       body: Center(
         child: Padding(
-          padding: const EdgeInsets.all(32),
+          padding: EdgeInsets.all(32),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(Icons.settings_suggest_outlined, size: 48, color: Colors.black54),
-              const SizedBox(height: 16),
-              const Text(
+              Icon(
+                Icons.settings_suggest_outlined,
+                size: 48,
+                color: Colors.black54,
+              ),
+              SizedBox(height: 16),
+              Text(
                 'Supabase configuration missing',
                 style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600),
                 textAlign: TextAlign.center,
               ),
-              const SizedBox(height: 12),
-              const Text(
+              SizedBox(height: 12),
+              Text(
                 'Run the app with --dart-define=SUPABASE_URL=... and '
                 '--dart-define=SUPABASE_ANON_KEY=... (see README.md).',
                 textAlign: TextAlign.center,
