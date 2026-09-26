@@ -1,7 +1,6 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/error/app_failure.dart';
-import '../../../core/error/error_mapper.dart';
 import 'event_model.dart';
 
 class EventsRepository {
@@ -9,16 +8,9 @@ class EventsRepository {
 
   final SupabaseClient _client;
 
-  /// Upcoming events, ordered by start time. "Upcoming" is intentionally
-  /// simple for this demo: anything that has not ended yet.
   Future<List<EventModel>> fetchUpcomingEvents() async {
     try {
-      final nowIso = DateTime.now().toUtc().toIso8601String();
-      final rows = await _client
-          .from('events')
-          .select()
-          .gte('ends_at', nowIso)
-          .order('starts_at');
+      final rows = await _client.rpc('list_upcoming_events');
       return (rows as List)
           .map((row) => EventModel.fromMap(row as Map<String, dynamic>))
           .toList();
@@ -31,77 +23,57 @@ class EventsRepository {
 
   Future<EventModel> fetchEvent(String eventId) async {
     try {
-      final row =
+      final eventRow =
           await _client.from('events').select().eq('id', eventId).single();
-      return EventModel.fromMap(row);
+      final staffingRows = await _client.rpc(
+        'get_event_staffing',
+        params: {'p_event_id': eventId},
+      );
+      final staffing = (staffingRows as List).cast<Map<String, dynamic>>();
+      final summary =
+          staffing.isEmpty ? const <String, dynamic>{} : staffing.first;
+      return EventModel.fromMap({...eventRow, ...summary});
     } catch (_) {
       throw const AppFailure('Could not load this event.');
     }
   }
 
-  /// Event ids the current user has joined.
-  Future<Set<String>> fetchMyMembershipEventIds(String userId) async {
+  Future<Map<String, MembershipStatus>> fetchMyMemberships(
+    String userId,
+  ) async {
     try {
       final rows = await _client
           .from('event_members')
-          .select('event_id')
+          .select('event_id,status')
           .eq('user_id', userId);
-      return (rows as List).map((row) => row['event_id'] as String).toSet();
+      return {
+        for (final row in rows as List)
+          row['event_id'] as String:
+              MembershipStatus.fromDatabase(row['status'] as String),
+      };
     } catch (_) {
       throw const AppFailure('Could not load your shifts.');
     }
   }
 
-  /// Joins the current user to an event.
-  ///
-  /// Duplicate joins are prevented by the `unique(event_id, user_id)`
-  /// constraint in the database. The RLS policy also rejects events that
-  /// have already ended, so business rules are enforced server-side rather
-  /// than trusting a stale client.
-  Future<void> joinEvent({
-    required String eventId,
-    required String userId,
-  }) async {
+  Future<MembershipStatus> joinEvent({required String eventId}) async {
     try {
-      await _client.from('event_members').insert({
-        'event_id': eventId,
-        'user_id': userId,
-      });
-    } on PostgrestException catch (error) {
-      throw mapUniqueViolation(
-        error,
-        duplicateMessage: "You've already joined this shift.",
-        genericMessage: 'Could not join this shift. Please try again.',
+      final status = await _client.rpc(
+        'join_event',
+        params: {'p_event_id': eventId},
       );
+      return MembershipStatus.fromDatabase(status as String);
     } catch (_) {
       throw const AppFailure('Could not join this shift. Please try again.');
     }
   }
 
-  /// Leaves a shift the current user previously joined.
-  ///
-  /// The database policy refuses deletion while an active time entry exists,
-  /// preventing a worker from disappearing from a shift while still clocked
-  /// in even if two clients race or the UI is stale.
-  Future<void> leaveEvent({
-    required String eventId,
-    required String userId,
-  }) async {
+  Future<void> leaveEvent({required String eventId}) async {
     try {
-      final deleted = await _client
-          .from('event_members')
-          .delete()
-          .eq('event_id', eventId)
-          .eq('user_id', userId)
-          .select('id');
-
-      if ((deleted as List).isEmpty) {
-        throw const AppFailure(
-          'Could not leave this shift. Clock out first, then try again.',
-        );
-      }
-    } on AppFailure {
-      rethrow;
+      await _client.rpc(
+        'leave_event',
+        params: {'p_event_id': eventId},
+      );
     } catch (_) {
       throw const AppFailure(
         'Could not leave this shift. Clock out first, then try again.',
