@@ -7,7 +7,7 @@ void main() {
   group('mapUniqueViolation', () {
     test('maps a 23505 unique violation (duplicate join / duplicate clock-in) '
         'to the duplicate message', () {
-      final error = PostgrestException(
+      const error = PostgrestException(
         message: 'duplicate key value violates unique constraint',
         code: '23505',
       );
@@ -23,7 +23,7 @@ void main() {
     });
 
     test('maps a non-duplicate Postgrest error to the generic message', () {
-      final error = PostgrestException(message: 'network error', code: '500');
+      const error = PostgrestException(message: 'network error', code: '500');
 
       final failure = mapUniqueViolation(
         error,
