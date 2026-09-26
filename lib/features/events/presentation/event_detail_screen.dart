@@ -16,6 +16,50 @@ class EventDetailScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final eventAsync = ref.watch(eventDetailProvider(eventId));
     final membershipsAsync = ref.watch(myMembershipsProvider);
+    final leaveState = ref.watch(leaveEventControllerProvider);
+
+    ref.listen(leaveEventControllerProvider, (previous, next) {
+      if (next.hasError) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(friendlyErrorMessage(next.error!))),
+        );
+      }
+    });
+
+    Future<void> leaveShift() async {
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: const Text('Leave this shift?'),
+          content: const Text(
+            'You can only leave when you are not clocked in. '
+            'You can join again later if the shift is still open.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: const Text('Keep shift'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(dialogContext, true),
+              child: const Text('Leave shift'),
+            ),
+          ],
+        ),
+      );
+      if (confirmed != true || !context.mounted) return;
+
+      ref.read(membershipMutationEventIdProvider.notifier).state = eventId;
+      final success =
+          await ref.read(leaveEventControllerProvider.notifier).leave(eventId);
+      ref.read(membershipMutationEventIdProvider.notifier).state = null;
+
+      if (success && context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Shift removed from My shifts.')),
+        );
+      }
+    }
 
     return Scaffold(
       appBar: AppBar(title: const Text('Shift Detail')),
@@ -70,7 +114,7 @@ class EventDetailScreen extends ConsumerWidget {
                       borderRadius: BorderRadius.circular(10),
                     ),
                     child: const Text(
-                      'Join this shift from the events list to clock in and chat with the team.',
+                      'Join this shift from Available shifts to clock in and chat with the team.',
                       style: TextStyle(color: Color(0xFF9A3412)),
                     ),
                   )
@@ -81,6 +125,14 @@ class EventDetailScreen extends ConsumerWidget {
                     onPressed: () => context.push('/events/${event.id}/chat'),
                     icon: const Icon(Icons.chat_bubble_outline),
                     label: const Text('Open Team Chat'),
+                  ),
+                  const SizedBox(height: 8),
+                  TextButton.icon(
+                    onPressed: leaveState.isLoading ? null : leaveShift,
+                    icon: const Icon(Icons.event_busy_outlined),
+                    label: Text(
+                      leaveState.isLoading ? 'Leaving…' : 'Leave Shift',
+                    ),
                   ),
                 ],
               ],
