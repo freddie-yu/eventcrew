@@ -15,6 +15,29 @@ alter table public.event_members
 create index if not exists event_members_event_status_joined_idx
   on public.event_members (event_id, status, joined_at);
 
+-- Membership mutations now go exclusively through the atomic RPCs below.
+-- Remove legacy direct client policies so old/stale clients cannot bypass
+-- capacity assignment or waitlist promotion.
+drop policy if exists "event_members_insert_own" on public.event_members;
+drop policy if exists "event_members_insert_own_open_event" on public.event_members;
+drop policy if exists "event_members_delete_own_not_clocked_in" on public.event_members;
+
+-- Only confirmed staff may clock in. Waitlisted membership is not attendance
+-- eligibility even if a stale or malicious client calls time_entries directly.
+drop policy if exists "time_entries_insert_own_member" on public.time_entries;
+create policy "time_entries_insert_own_confirmed_member"
+  on public.time_entries for insert
+  to authenticated
+  with check (
+    user_id = auth.uid()
+    and exists (
+      select 1 from public.event_members
+      where event_members.event_id = time_entries.event_id
+        and event_members.user_id = auth.uid()
+        and event_members.status = 'confirmed'
+    )
+  );
+
 -- Event members may see the profile identity of people who share at least one
 -- event with them. This supports named team chat without exposing the global
 -- staff directory.
@@ -30,7 +53,38 @@ create policy "profiles_select_shared_event"
       join public.event_members theirs
         on theirs.event_id = mine.event_id
       where mine.user_id = auth.uid()
+        and mine.status = 'confirmed'
         and theirs.user_id = profiles.id
+        and theirs.status = 'confirmed'
+    )
+  );
+
+-- Team chat is restricted to confirmed staff. Waitlisted users do not gain
+-- operational chat access before promotion.
+drop policy if exists "messages_select_event_members" on public.messages;
+create policy "messages_select_confirmed_event_members"
+  on public.messages for select
+  to authenticated
+  using (
+    exists (
+      select 1 from public.event_members
+      where event_members.event_id = messages.event_id
+        and event_members.user_id = auth.uid()
+        and event_members.status = 'confirmed'
+    )
+  );
+
+drop policy if exists "messages_insert_event_members" on public.messages;
+create policy "messages_insert_confirmed_event_members"
+  on public.messages for insert
+  to authenticated
+  with check (
+    user_id = auth.uid()
+    and exists (
+      select 1 from public.event_members
+      where event_members.event_id = messages.event_id
+        and event_members.user_id = auth.uid()
+        and event_members.status = 'confirmed'
     )
   );
 
