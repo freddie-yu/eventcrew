@@ -14,12 +14,13 @@ final upcomingEventsProvider =
   return ref.watch(eventsRepositoryProvider).fetchUpcomingEvents();
 });
 
-/// Event ids the signed-in user currently belongs to. Invalidated after a
-/// successful join/leave so membership state always comes back from Supabase.
-final myMembershipsProvider = FutureProvider.autoDispose<Set<String>>((ref) {
+final myMembershipsProvider =
+    FutureProvider.autoDispose<Map<String, MembershipStatus>>((ref) {
   final userId = ref.watch(currentUserProvider)?.id;
-  if (userId == null) return Future.value(<String>{});
-  return ref.watch(eventsRepositoryProvider).fetchMyMembershipEventIds(userId);
+  if (userId == null) {
+    return Future.value(const <String, MembershipStatus>{});
+  }
+  return ref.watch(eventsRepositoryProvider).fetchMyMemberships(userId);
 });
 
 final eventDetailProvider =
@@ -27,7 +28,6 @@ final eventDetailProvider =
   return ref.watch(eventsRepositoryProvider).fetchEvent(eventId);
 });
 
-/// UI-only: which event currently has a membership mutation in flight.
 final membershipMutationEventIdProvider =
     StateProvider.autoDispose<String?>((ref) => null);
 
@@ -35,22 +35,22 @@ class JoinEventController extends AsyncNotifier<void> {
   @override
   Future<void> build() async {}
 
-  Future<bool> join(String eventId) async {
-    final userId = ref.read(currentUserProvider)?.id;
-    if (userId == null) return false;
+  Future<MembershipStatus?> join(String eventId) async {
+    if (ref.read(currentUserProvider) == null) return null;
 
     state = const AsyncLoading();
-    final result = await AsyncValue.guard(
-      () => ref
-          .read(eventsRepositoryProvider)
-          .joinEvent(eventId: eventId, userId: userId),
-    );
-    state = result;
-
-    if (!result.hasError) {
+    try {
+      final status =
+          await ref.read(eventsRepositoryProvider).joinEvent(eventId: eventId);
+      state = const AsyncData(null);
       ref.invalidate(myMembershipsProvider);
+      ref.invalidate(upcomingEventsProvider);
+      ref.invalidate(eventDetailProvider(eventId));
+      return status;
+    } catch (error, stackTrace) {
+      state = AsyncError(error, stackTrace);
+      return null;
     }
-    return !result.hasError;
   }
 }
 
@@ -62,19 +62,18 @@ class LeaveEventController extends AsyncNotifier<void> {
   Future<void> build() async {}
 
   Future<bool> leave(String eventId) async {
-    final userId = ref.read(currentUserProvider)?.id;
-    if (userId == null) return false;
+    if (ref.read(currentUserProvider) == null) return false;
 
     state = const AsyncLoading();
     final result = await AsyncValue.guard(
-      () => ref
-          .read(eventsRepositoryProvider)
-          .leaveEvent(eventId: eventId, userId: userId),
+      () => ref.read(eventsRepositoryProvider).leaveEvent(eventId: eventId),
     );
     state = result;
 
     if (!result.hasError) {
       ref.invalidate(myMembershipsProvider);
+      ref.invalidate(upcomingEventsProvider);
+      ref.invalidate(eventDetailProvider(eventId));
     }
     return !result.hasError;
   }

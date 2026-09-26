@@ -3,91 +3,112 @@
 A production-minded **Flutter + Supabase event staffing app** built as a focused
 vertical slice of a real workforce workflow:
 
-**sign in → discover shifts → join → clock in/out → team chat → leave shift**
+**discover shifts → join / waitlist → clock in/out → team chat → notifications**
 
-**Flutter · Riverpod · go_router · Supabase Auth · PostgreSQL/RLS · Realtime**
+**Flutter · Riverpod · go_router · Supabase Auth/PostgreSQL/RLS/Realtime · Firebase Cloud Messaging**
 
-> Portfolio goal: demonstrate the skills needed to extend an existing staffing
-> app safely — feature delivery, state management, Supabase/Postgres data
-> integrity, realtime lifecycle management, tests, and CI — rather than build a
-> disposable UI prototype.
+> Portfolio goal: demonstrate how I would safely extend an existing staffing
+> app — incremental feature delivery, server-side business invariants, realtime
+> communication, push integration boundaries, tests, and CI.
 
 ## Product workflow
 
-### Staff-facing
-
-- **My shifts / Available shifts** separation for fast operational scanning
-- Join an open event once; duplicate membership is blocked by PostgreSQL
-- Leave a shift safely when not actively clocked in
-- Clock in/out with attendance restored from PostgreSQL after navigation/reload
-- Event-only realtime team chat with the latest 50 messages
+- **My shifts / Available shifts** with Confirmed and Waitlisted states
+- Capacity meter and automatic waitlist promotion
+- Server-authoritative clock in/out restored after navigation or reload
+- Event-only realtime chat with staff name, role, and initials/avatar fallback
+- Optional FCM device registration for shift reminders and operational alerts
 - Loading, empty, validation, and user-safe error states
 
-### Data integrity
+## Staffing rules live on the server
 
-Important rules live in Supabase/PostgreSQL, not only in Flutter:
+Flutter does not decide who gets the last shift place.
 
-- RLS limits user-owned membership and attendance records
-- event chat is accessible only to event members
-- a unique constraint prevents duplicate shift joins
-- a partial unique index prevents concurrent double clock-ins
-- database triggers own attendance timestamps and block rewrites/reopens
-- shift leave is rejected while an active clock-in exists
-- expired events cannot be joined
-- chat messages must be non-empty and are capped at 1000 characters
+- `join_event()` locks the event row before assigning Confirmed or Waitlisted
+- `leave_event()` blocks active clock-ins and promotes the oldest waitlisted staff
+- one membership per user/event remains database-enforced
+- one active clock-in per user/event remains database-enforced
+- attendance timestamps are assigned/protected by PostgreSQL
+- profile RLS exposes staff identity only to people sharing an event
+- event chat remains member-only
 
-This keeps invariants intact across multiple devices, retries, stale UI, and
-concurrent requests.
+This protects the workflow across concurrent devices, retries, and stale clients.
+
+## Push notification boundary
+
+The app registers the authenticated device's FCM token in `device_tokens`
+only when Firebase configuration is supplied. Firebase credentials are optional,
+so the Web portfolio build still works without push configuration.
+
+Notification sending happens in:
+
+`supabase/functions/send-shift-notification/index.ts`
+
+The Edge Function uses a Firebase service account stored in server-side secrets,
+sends through FCM HTTP v1, and records an auditable row in `notifications`.
+No service credential is shipped in Flutter.
+
+## Design system
+
+The v2 UI is backed by a dedicated Figma file:
+
+**EventCrew — Staffing Mobile Design System**
+
+https://www.figma.com/design/rDzvFUgqmI5ZnT1JhYRm40
+
+It contains EventCrew color/spacing/radius tokens, reusable staffing components,
+and four mobile screens:
+
+- Event list
+- Shift detail
+- Clock-in
+- Team chat
+
+The same core values are mirrored in `AppTheme` so the design is intended to
+round-trip into Flutter rather than remain a disconnected mockup.
 
 ## Architecture
 
 ```text
-Flutter screens
+Flutter UI
   → Riverpod providers/controllers
-    → feature repositories
-      → Supabase Auth
-      → PostgreSQL + RLS
-      → Supabase Realtime
+    → feature repositories/services
+      → Supabase Auth / PostgreSQL + RLS / Realtime
+      → Firebase Messaging (device token + foreground delivery)
+
+Trusted ops backend
+  → Supabase Edge Function
+    → FCM HTTP v1
+    → notification audit row
 ```
 
-Code is grouped by feature under `lib/features/`, with routing/configuration,
-error mapping, theme, and Supabase dependency injection under `lib/core/`.
-
-See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the design decisions and
-server-side invariants.
+See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 ## Why this maps to an event-staffing role
 
 | Job need | Evidence in this repo |
 | --- | --- |
-| Strong Flutter | Feature-based UI, Material 3, forms, async states, navigation |
-| Strong Supabase | Auth, Postgres, RLS, migrations, Realtime |
-| SQL/PostgreSQL | Constraints, indexes, triggers, policies, seed data |
-| Realtime | Event-scoped Postgres INSERT subscription with cleanup |
-| Existing-codebase work | Repository/provider boundaries and incremental migrations |
-| Performance/reliability | Scoped queries, latest-50 chat history, no global channels |
-| Bug prevention | Server-side invariants + unit/widget tests + CI |
-| UI/UX sense | Operational states, clear shift grouping, confirmations/errors |
+| Strong Flutter | Feature-based UI, Riverpod, navigation, async/operational states |
+| Strong Supabase | Auth, RLS, RPCs, migrations, Realtime |
+| SQL/PostgreSQL | Constraints, indexes, triggers, locking, waitlist promotion |
+| Realtime | Event-scoped chat subscription with lifecycle cleanup |
+| Push notifications | FCM token lifecycle + trusted Edge Function dispatcher |
+| Existing-codebase work | Incremental features without replacing the architecture |
+| Reliability | Server-side invariants + unit/widget tests + CI |
+| UI/UX | Shared Figma/Flutter tokens and staffing-specific components |
 
 ## Run locally
 
-Requires **Flutter 3.27+** and a Supabase project.
+Requires **Flutter 3.27+ / Dart 3.6+** and Supabase.
 
-This repository currently includes Web scaffolding. To add Android/iOS platform
-folders for local device builds, run:
+Run migrations in order:
 
-```bash
-flutter create .
-```
+1. `supabase/migrations/001_initial_schema.sql`
+2. `supabase/migrations/002_operational_guardrails.sql`
+3. `supabase/migrations/003_staffing_operations_v2.sql`
+4. `supabase/seed.sql`
 
-Then:
-
-1. In **Supabase → SQL Editor**, run migrations in order:
-   - `supabase/migrations/001_initial_schema.sql`
-   - `supabase/migrations/002_operational_guardrails.sql`
-2. Run `supabase/seed.sql`.
-3. In **Authentication → Users**, create a demo user with email/password.
-4. Start the app:
+Create a Supabase Auth demo user, then:
 
 ```bash
 flutter pub get
@@ -96,23 +117,39 @@ flutter run -d chrome \
   --dart-define=SUPABASE_ANON_KEY=YOUR_PUBLISHABLE_KEY
 ```
 
-The publishable/anon key is client-side configuration; authorization is enforced
-through RLS. Missing configuration produces a clear setup screen instead of a
-runtime crash.
+### Optional Firebase Messaging configuration
+
+Native/Web push is enabled only when these compile-time values are supplied:
+
+```text
+FIREBASE_API_KEY
+FIREBASE_APP_ID
+FIREBASE_MESSAGING_SENDER_ID
+FIREBASE_PROJECT_ID
+FIREBASE_AUTH_DOMAIN          # optional
+FIREBASE_STORAGE_BUCKET       # optional
+FIREBASE_VAPID_KEY            # Web token registration
+```
+
+For the Edge Function, configure server-side secrets:
+
+```text
+FIREBASE_SERVICE_ACCOUNT
+NOTIFICATION_DISPATCH_SECRET
+```
+
+Never place the Firebase service account in Flutter or in the repository.
 
 ## Demo script
 
-A reviewer can validate the core workflow in a few minutes:
-
 1. Sign in.
-2. Join a card under **Available shifts**.
-3. Confirm it moves to **My shifts**.
-4. Open the shift and clock in.
-5. Reload/navigate away and return; attendance remains active from Postgres.
-6. Open **Team Chat** and send a message.
-7. Try to leave while clocked in; the database rejects it.
-8. Clock out and leave the shift successfully.
-9. With a second user/device, join the same event and verify realtime chat.
+2. Join an event with open capacity and see **Confirmed**.
+3. Fill an event to capacity with other demo users; the next user joins as **Waitlisted**.
+4. Remove a confirmed user and verify the oldest waitlisted user is promoted.
+5. Clock in and reload; attendance persists from PostgreSQL.
+6. Open Team Chat from two users and verify names/roles + realtime inserts.
+7. With Firebase configured, register the device and dispatch a test shift alert
+   through the trusted Edge Function.
 
 ## Quality checks
 
@@ -124,40 +161,10 @@ flutter test
 flutter build web --release
 ```
 
-The repository includes model tests and widget tests for authentication
-validation, event states, attendance states, and error mapping.
-
-## Deploy Web
-
-Build with the same Supabase values:
-
-```bash
-flutter build web --release \
-  --dart-define=SUPABASE_URL=https://YOUR_PROJECT.supabase.co \
-  --dart-define=SUPABASE_ANON_KEY=YOUR_PUBLISHABLE_KEY
-```
-
-Deploy `build/web` to a static host and configure SPA fallback to
-`index.html`.
-
 ## Next production increments
 
-The next features are intentionally prioritized around event-staffing operations:
-
-1. **Push notifications** — shift reminders, schedule changes, urgent broadcast
-2. **Staff identity in chat** — profile name/avatar with member-aware RLS
-3. **Capacity + waitlist** — event staffing limits and promotion workflow
-4. **Admin/ops workflow** — publish shifts, inspect attendance, broadcast updates
-5. **Native release pipeline** — Android/iOS folders, signing, store CI
-6. **Observability** — crash/error reporting and basic product analytics
-7. **Offline/retry behavior** — connectivity-aware attendance and message UX
-
-Self-service registration is deliberately not a priority for this demo because
-many staffing products provision or invite workers through an admin/HR workflow.
-It can be added with Supabase Auth if the target product requires it.
-
-## Current scope
-
-This is a portfolio-ready staffing vertical slice, not a clone of any employer's
-proprietary application. It uses synthetic event data and demonstrates an
-implementation approach that can be adapted to an existing production codebase.
+- Admin/ops UI for publishing shifts and sending broadcasts
+- Native Android/iOS signing and store pipelines
+- Crash reporting and product analytics
+- Offline/retry UX for attendance and chat
+- Notification inbox screen and deep-link handling

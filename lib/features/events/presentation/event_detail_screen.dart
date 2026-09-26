@@ -3,9 +3,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
+import '../../../core/theme/app_theme.dart';
 import '../../../shared/widgets/async_value_view.dart';
+import '../../../shared/widgets/status_badge.dart';
 import '../../attendance/presentation/widgets/attendance_panel.dart';
+import '../data/event_model.dart';
 import 'events_providers.dart';
+import 'widgets/capacity_indicator.dart';
 
 class EventDetailScreen extends ConsumerWidget {
   const EventDetailScreen({super.key, required this.eventId});
@@ -17,6 +21,7 @@ class EventDetailScreen extends ConsumerWidget {
     final eventAsync = ref.watch(eventDetailProvider(eventId));
     final membershipsAsync = ref.watch(myMembershipsProvider);
     final leaveState = ref.watch(leaveEventControllerProvider);
+    final joinState = ref.watch(joinEventControllerProvider);
 
     ref.listen(leaveEventControllerProvider, (previous, next) {
       if (next.hasError) {
@@ -25,6 +30,25 @@ class EventDetailScreen extends ConsumerWidget {
         );
       }
     });
+    ref.listen(joinEventControllerProvider, (previous, next) {
+      if (next.hasError) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(friendlyErrorMessage(next.error!))),
+        );
+      }
+    });
+
+    Future<void> joinShift(EventModel event) async {
+      final status =
+          await ref.read(joinEventControllerProvider.notifier).join(event.id);
+      if (status != null && context.mounted) {
+        final text = status == MembershipStatus.waitlisted
+            ? 'Added to the waitlist.'
+            : 'Shift confirmed.';
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(text)));
+      }
+    }
 
     Future<void> leaveShift() async {
       final confirmed = await showDialog<bool>(
@@ -32,8 +56,8 @@ class EventDetailScreen extends ConsumerWidget {
         builder: (dialogContext) => AlertDialog(
           title: const Text('Leave this shift?'),
           content: const Text(
-            'You can only leave when you are not clocked in. '
-            'You can join again later if the shift is still open.',
+            'If you are confirmed, the next waitlisted staff member may be '
+            'promoted automatically. Clock out before leaving.',
           ),
           actions: [
             TextButton(
@@ -49,11 +73,8 @@ class EventDetailScreen extends ConsumerWidget {
       );
       if (confirmed != true || !context.mounted) return;
 
-      ref.read(membershipMutationEventIdProvider.notifier).state = eventId;
       final success =
           await ref.read(leaveEventControllerProvider.notifier).leave(eventId);
-      ref.read(membershipMutationEventIdProvider.notifier).state = null;
-
       if (success && context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Shift removed from My shifts.')),
@@ -69,22 +90,40 @@ class EventDetailScreen extends ConsumerWidget {
         data: (event) => AsyncValueView(
           value: membershipsAsync,
           onRetry: () => ref.invalidate(myMembershipsProvider),
-          data: (memberIds) {
-            final isMember = memberIds.contains(event.id);
+          data: (memberships) {
+            final membership = memberships[event.id];
+            final isMember = membership != null;
             final dateFormat = DateFormat('EEE, MMM d, yyyy');
             final timeFormat = DateFormat('h:mm a');
 
             return ListView(
               padding: const EdgeInsets.all(20),
               children: [
-                Text(
-                  event.title,
-                  style: const TextStyle(
-                    fontSize: 22,
-                    fontWeight: FontWeight.bold,
-                  ),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: Text(
+                        event.title,
+                        style: const TextStyle(
+                          fontSize: 22,
+                          fontWeight: FontWeight.bold,
+                          color: AppTheme.textPrimary,
+                        ),
+                      ),
+                    ),
+                    if (membership != null)
+                      StatusBadge(
+                        label: membership == MembershipStatus.waitlisted
+                            ? 'Waitlisted'
+                            : 'Confirmed',
+                        tone: membership == MembershipStatus.waitlisted
+                            ? BadgeTone.warning
+                            : BadgeTone.positive,
+                      ),
+                  ],
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: 16),
                 _DetailRow(
                   icon: Icons.calendar_today_outlined,
                   text: dateFormat.format(event.startsAt),
@@ -102,27 +141,60 @@ class EventDetailScreen extends ConsumerWidget {
                   const SizedBox(height: 16),
                   Text(
                     event.description!,
-                    style: const TextStyle(color: Colors.black87),
+                    style: const TextStyle(color: AppTheme.textPrimary),
+                  ),
+                ],
+                if (event.capacity > 0) ...[
+                  const SizedBox(height: 24),
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: AppTheme.card,
+                      borderRadius:
+                          BorderRadius.circular(AppTheme.radiusLg),
+                      border: Border.all(color: AppTheme.border),
+                    ),
+                    child: CapacityIndicator(event: event),
                   ),
                 ],
                 const SizedBox(height: 24),
                 if (!isMember)
-                  Container(
-                    padding: const EdgeInsets.all(14),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFFFF7ED),
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: const Text(
-                      'Join this shift from Available shifts to clock in and chat with the team.',
-                      style: TextStyle(color: Color(0xFF9A3412)),
+                  ElevatedButton(
+                    onPressed: joinState.isLoading ? null : () => joinShift(event),
+                    child: Text(
+                      joinState.isLoading
+                          ? 'Joining…'
+                          : event.isFull
+                              ? 'Join Waitlist'
+                              : 'Join Shift',
                     ),
                   )
-                else ...[
+                else if (membership == MembershipStatus.waitlisted) ...[
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFFF7ED),
+                      borderRadius:
+                          BorderRadius.circular(AppTheme.radiusMd),
+                    ),
+                    child: const Text(
+                      'You are on the waitlist. You will be promoted '
+                      'automatically if a confirmed place opens.',
+                      style: TextStyle(color: AppTheme.warning),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextButton.icon(
+                    onPressed: leaveState.isLoading ? null : leaveShift,
+                    icon: const Icon(Icons.event_busy_outlined),
+                    label: const Text('Leave Waitlist'),
+                  ),
+                ] else ...[
                   AttendancePanel(eventId: event.id),
                   const SizedBox(height: 16),
                   OutlinedButton.icon(
-                    onPressed: () => context.push('/events/${event.id}/chat'),
+                    onPressed: () =>
+                        context.push('/events/${event.id}/chat'),
                     icon: const Icon(Icons.chat_bubble_outline),
                     label: const Text('Open Team Chat'),
                   ),
@@ -154,9 +226,17 @@ class _DetailRow extends StatelessWidget {
   Widget build(BuildContext context) {
     return Row(
       children: [
-        Icon(icon, size: 18, color: Colors.black54),
+        Icon(icon, size: 18, color: AppTheme.textSecondary),
         const SizedBox(width: 8),
-        Expanded(child: Text(text, style: const TextStyle(fontSize: 14))),
+        Expanded(
+          child: Text(
+            text,
+            style: const TextStyle(
+              fontSize: 14,
+              color: AppTheme.textPrimary,
+            ),
+          ),
+        ),
       ],
     );
   }

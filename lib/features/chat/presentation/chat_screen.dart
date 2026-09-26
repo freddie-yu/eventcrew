@@ -3,9 +3,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
 import '../../../core/error/app_failure.dart';
+import '../../../core/theme/app_theme.dart';
 import '../../../shared/widgets/async_value_view.dart';
 import '../../../shared/widgets/empty_state.dart';
 import '../../auth/presentation/auth_controller.dart';
+import '../data/message_model.dart';
 import 'chat_providers.dart';
 
 class ChatScreen extends ConsumerStatefulWidget {
@@ -66,8 +68,6 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     final messagesAsync = ref.watch(chatControllerProvider(widget.eventId));
     final currentUserId = ref.watch(currentUserProvider)?.id;
 
-    // Scroll to the newest message on initial load and whenever the list
-    // grows (a realtime insert arrived), but never on unrelated rebuilds.
     ref.listen(chatControllerProvider(widget.eventId), (previous, next) {
       final prevLen = previous?.valueOrNull?.length ?? 0;
       final nextLen = next.valueOrNull?.length ?? 0;
@@ -75,7 +75,22 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     });
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Team Chat')),
+      appBar: AppBar(
+        title: const Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Team Chat'),
+            Text(
+              'Event staff only',
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w400,
+                color: AppTheme.textSecondary,
+              ),
+            ),
+          ],
+        ),
+      ),
       body: Column(
         children: [
           Expanded(
@@ -97,11 +112,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                   itemCount: messages.length,
                   itemBuilder: (context, index) {
                     final message = messages[index];
-                    final isMine = message.userId == currentUserId;
-                    return _MessageBubble(
-                      body: message.body,
-                      time: DateFormat('h:mm a').format(message.createdAt),
-                      isMine: isMine,
+                    return _MessageRow(
+                      message: message,
+                      isMine: message.userId == currentUserId,
                     );
                   },
                 );
@@ -110,8 +123,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
           ),
           SafeArea(
             top: false,
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+            child: Container(
+              color: AppTheme.card,
+              padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
               child: Row(
                 children: [
                   Expanded(
@@ -150,48 +164,109 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   }
 }
 
-class _MessageBubble extends StatelessWidget {
-  const _MessageBubble({
-    required this.body,
-    required this.time,
-    required this.isMine,
-  });
+class _MessageRow extends StatelessWidget {
+  const _MessageRow({required this.message, required this.isMine});
 
-  final String body;
-  final String time;
+  final ChatMessage message;
   final bool isMine;
 
   @override
   Widget build(BuildContext context) {
-    final bg = isMine ? const Color(0xFF2757F2) : Colors.white;
-    final fg = isMine ? Colors.white : Colors.black87;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 5),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.end,
+        mainAxisAlignment:
+            isMine ? MainAxisAlignment.end : MainAxisAlignment.start,
+        children: [
+          if (!isMine) ...[
+            _StaffAvatar(name: message.senderName),
+            const SizedBox(width: 8),
+          ],
+          Flexible(
+            child: _MessageBubble(message: message, isMine: isMine),
+          ),
+        ],
+      ),
+    );
+  }
+}
 
-    return Align(
-      alignment: isMine ? Alignment.centerRight : Alignment.centerLeft,
-      child: Container(
-        margin: const EdgeInsets.symmetric(vertical: 4),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-        constraints: const BoxConstraints(maxWidth: 280),
-        decoration: BoxDecoration(
-          color: bg,
-          borderRadius: BorderRadius.circular(14),
-          border: isMine ? null : Border.all(color: const Color(0xFFE5E7EB)),
+class _StaffAvatar extends StatelessWidget {
+  const _StaffAvatar({required this.name});
+
+  final String name;
+
+  @override
+  Widget build(BuildContext context) {
+    final parts = name.trim().split(RegExp(r'\s+'));
+    final initials = parts
+        .take(2)
+        .where((part) => part.isNotEmpty)
+        .map((part) => part[0].toUpperCase())
+        .join();
+
+    return CircleAvatar(
+      radius: 18,
+      backgroundColor: const Color(0xFFE0E7FF),
+      child: Text(
+        initials.isEmpty ? '?' : initials,
+        style: const TextStyle(
+          color: AppTheme.primary,
+          fontSize: 12,
+          fontWeight: FontWeight.w700,
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(body, style: TextStyle(color: fg)),
-            const SizedBox(height: 4),
+      ),
+    );
+  }
+}
+
+class _MessageBubble extends StatelessWidget {
+  const _MessageBubble({required this.message, required this.isMine});
+
+  final ChatMessage message;
+  final bool isMine;
+
+  @override
+  Widget build(BuildContext context) {
+    final background = isMine ? AppTheme.primary : AppTheme.card;
+    final foreground = isMine ? Colors.white : AppTheme.textPrimary;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+      constraints: const BoxConstraints(maxWidth: 286),
+      decoration: BoxDecoration(
+        color: background,
+        borderRadius: BorderRadius.circular(AppTheme.radiusLg),
+        border: isMine ? null : Border.all(color: AppTheme.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (!isMine) ...[
             Text(
-              time,
-              style: TextStyle(
-                color: isMine ? Colors.white70 : Colors.black45,
-                fontSize: 11,
+              message.senderRole?.trim().isNotEmpty == true
+                  ? '${message.senderName} · ${message.senderRole}'
+                  : message.senderName,
+              style: const TextStyle(
+                color: Color(0xFF374151),
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
               ),
             ),
+            const SizedBox(height: 5),
           ],
-        ),
+          Text(message.body, style: TextStyle(color: foreground)),
+          const SizedBox(height: 4),
+          Text(
+            DateFormat('h:mm a').format(message.createdAt),
+            style: TextStyle(
+              color: isMine ? Colors.white70 : Colors.black45,
+              fontSize: 11,
+            ),
+          ),
+        ],
       ),
     );
   }

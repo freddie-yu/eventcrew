@@ -4,21 +4,24 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'core/config/env.dart';
 import 'core/router/app_router.dart';
 import 'core/theme/app_theme.dart';
+import 'features/notifications/presentation/push_providers.dart';
 
 class EventCrewApp extends ConsumerWidget {
   const EventCrewApp({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // If compile-time Supabase config is missing, show a clear
-    // developer-facing message instead of touching Supabase.instance
-    // (which would throw) or silently running against nothing.
     if (!Env.isConfigured) {
       return const MaterialApp(
         debugShowCheckedModeBanner: false,
         home: _MissingConfigScreen(),
       );
     }
+
+    // Push is optional. Watching this provider registers the current device
+    // token when Firebase is configured and keeps the registration lifecycle
+    // tied to the authenticated user.
+    ref.watch(pushNotificationServiceProvider);
 
     final router = ref.watch(appRouterProvider);
     return MaterialApp.router(
