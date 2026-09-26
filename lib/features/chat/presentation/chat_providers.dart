@@ -18,7 +18,8 @@ final chatRepositoryProvider = Provider<ChatRepository>((ref) {
 class ChatController
     extends AutoDisposeFamilyAsyncNotifier<List<ChatMessage>, String> {
   @override
-  Future<List<ChatMessage>> build(String eventId) async {
+  Future<List<ChatMessage>> build(String arg) async {
+    final eventId = arg;
     final repo = ref.watch(chatRepositoryProvider);
     final pending = <ChatMessage>[];
     var loadingHistory = true;
