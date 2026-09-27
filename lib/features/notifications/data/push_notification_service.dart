@@ -4,7 +4,8 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-import '../../../core/config/env.dart';
+import 'web_push_bridge_stub.dart'
+    if (dart.library.html) 'web_push_bridge_web.dart';
 
 class PushNotificationService {
   PushNotificationService(this._client, this._messaging);
@@ -17,7 +18,28 @@ class PushNotificationService {
   Stream<RemoteMessage> get foregroundMessages =>
       FirebaseMessaging.onMessage;
 
-  Future<void> start(String userId) async {
+  Future<bool> isRegistered(String userId) async {
+    final rows = await _client
+        .from('device_tokens')
+        .select('id')
+        .eq('user_id', userId)
+        .limit(1);
+    return (rows as List).isNotEmpty;
+  }
+
+  /// Enables push from an explicit user action.
+  ///
+  /// Web uses an explicit JS service-worker registration so deployments under
+  /// a sub-path (such as GitHub Pages /eventcrew/) do not depend on Firebase's
+  /// default root-level /firebase-messaging-sw.js lookup.
+  Future<bool> enableForUser(String userId) async {
+    if (kIsWeb) {
+      final token = await requestWebPushToken();
+      if (token == null || token.isEmpty) return false;
+      await _registerToken(userId: userId, token: token);
+      return true;
+    }
+
     final settings = await _messaging.requestPermission(
       alert: true,
       badge: true,
@@ -25,18 +47,13 @@ class PushNotificationService {
     );
 
     if (settings.authorizationStatus == AuthorizationStatus.denied) {
-      return;
+      return false;
     }
 
-    final token = await _messaging.getToken(
-      vapidKey: kIsWeb && Env.firebaseVapidKey.isNotEmpty
-          ? Env.firebaseVapidKey
-          : null,
-    );
+    final token = await _messaging.getToken();
+    if (token == null) return false;
 
-    if (token != null) {
-      await _registerToken(userId: userId, token: token);
-    }
+    await _registerToken(userId: userId, token: token);
 
     _tokenRefreshSubscription?.cancel();
     _tokenRefreshSubscription = _messaging.onTokenRefresh.listen(
@@ -44,6 +61,7 @@ class PushNotificationService {
         _registerToken(userId: userId, token: refreshedToken),
       ),
     );
+    return true;
   }
 
   Future<void> _registerToken({
