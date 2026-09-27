@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -19,11 +17,40 @@ final pushNotificationServiceProvider =
     ref.watch(supabaseClientProvider),
     FirebaseMessaging.instance,
   );
-
-  unawaited(service.start(user.id).catchError((Object _) {}));
   ref.onDispose(service.dispose);
   return service;
 });
+
+class PushRegistrationController extends AutoDisposeAsyncNotifier<bool> {
+  @override
+  Future<bool> build() async {
+    final user = ref.watch(currentUserProvider);
+    final service = ref.watch(pushNotificationServiceProvider);
+    if (user == null || service == null) return false;
+    return service.isRegistered(user.id);
+  }
+
+  Future<bool> enable() async {
+    final user = ref.read(currentUserProvider);
+    final service = ref.read(pushNotificationServiceProvider);
+    if (user == null || service == null) return false;
+
+    state = const AsyncLoading();
+    try {
+      final enabled = await service.enableForUser(user.id);
+      state = AsyncData(enabled);
+      return enabled;
+    } catch (error, stackTrace) {
+      state = AsyncError(error, stackTrace);
+      return false;
+    }
+  }
+}
+
+final pushRegistrationControllerProvider =
+    AsyncNotifierProvider.autoDispose<PushRegistrationController, bool>(
+  PushRegistrationController.new,
+);
 
 final foregroundPushMessageProvider =
     StreamProvider.autoDispose<RemoteMessage>((ref) {
