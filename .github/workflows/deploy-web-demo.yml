@@ -42,7 +42,14 @@ jobs:
           flutter build web --release \
             --base-href /eventcrew/ \
             --dart-define=SUPABASE_URL=https://ryqwctcihrcbqllexuut.supabase.co \
-            --dart-define=SUPABASE_ANON_KEY=sb_publishable_3kcy42eEHm3_HrCUSV37hg_VnruwvT6
+            --dart-define=SUPABASE_ANON_KEY=sb_publishable_3kcy42eEHm3_HrCUSV37hg_VnruwvT6 \
+            --dart-define=FIREBASE_PROJECT_ID=eventcrew-demo \
+            --dart-define=FIREBASE_MESSAGING_SENDER_ID=1015453781744 \
+            --dart-define=FIREBASE_AUTH_DOMAIN=eventcrew-demo.firebaseapp.com \
+            --dart-define=FIREBASE_STORAGE_BUCKET=eventcrew-demo.firebasestorage.app \
+            --dart-define=FIREBASE_API_KEY=AIzaSyD4RXH9Y_NZ84Uyk8S9pG3f0MAfqw43-58 \
+            --dart-define=FIREBASE_APP_ID=1:1015453781744:web:5dc0778cc6f055f9b47c35 \
+            --dart-define=FIREBASE_VAPID_KEY=BBxjShomDqz-A37ul5EBCRCmrktpO80ohftoSeA3DVpsgk9R06f0UvMZJTbFGANDkkkz58PVMN1QloGMLF4MWCY
 
       - name: Configure Pages
         uses: actions/configure-pages@v5
