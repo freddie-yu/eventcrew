@@ -24,6 +24,7 @@ final pushNotificationServiceProvider =
 class PushRegistrationController extends AutoDisposeAsyncNotifier<bool> {
   @override
   Future<bool> build() async {
+    if (!Env.isFirebaseConfigured) return false;
     final user = ref.watch(currentUserProvider);
     final service = ref.watch(pushNotificationServiceProvider);
     if (user == null || service == null) return false;
@@ -31,6 +32,7 @@ class PushRegistrationController extends AutoDisposeAsyncNotifier<bool> {
   }
 
   Future<bool> enable() async {
+    if (!Env.isFirebaseConfigured) return false;
     final user = ref.read(currentUserProvider);
     final service = ref.read(pushNotificationServiceProvider);
     if (user == null || service == null) return false;
