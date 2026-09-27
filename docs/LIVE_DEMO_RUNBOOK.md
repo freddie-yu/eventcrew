@@ -20,8 +20,9 @@ Apply these files in order:
 1. `supabase/migrations/001_initial_schema.sql`
 2. `supabase/migrations/002_operational_guardrails.sql`
 3. `supabase/migrations/003_staffing_operations_v2.sql`
-4. `supabase/seed.sql`
-5. Run `supabase/verify.sql` and confirm all checks return the expected rows.
+4. `supabase/migrations/004_security_hardening.sql`
+5. `supabase/seed.sql`
+6. Run `supabase/verify.sql` and confirm all checks return the expected rows.
 
 The seed is repeatable. Re-running it moves all four demo events back into the
 future. The first event has capacity 1 specifically to make the waitlist flow
