@@ -106,7 +106,8 @@ Run migrations in order:
 1. `supabase/migrations/001_initial_schema.sql`
 2. `supabase/migrations/002_operational_guardrails.sql`
 3. `supabase/migrations/003_staffing_operations_v2.sql`
-4. `supabase/seed.sql`
+4. `supabase/migrations/004_security_hardening.sql`
+5. `supabase/seed.sql`
 
 Create a Supabase Auth demo user, then:
 
