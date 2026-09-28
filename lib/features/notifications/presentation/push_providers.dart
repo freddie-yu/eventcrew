@@ -40,6 +40,9 @@ class PushRegistrationController extends AutoDisposeAsyncNotifier<bool> {
     state = const AsyncLoading();
     try {
       final enabled = await service.enableForUser(user.id);
+      if (enabled && Env.demoMode) {
+        await service.sendSelfTestNotification();
+      }
       state = AsyncData(enabled);
       return enabled;
     } catch (error, stackTrace) {
