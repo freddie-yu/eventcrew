@@ -49,7 +49,8 @@ jobs:
             --dart-define=FIREBASE_STORAGE_BUCKET=eventcrew-demo.firebasestorage.app \
             --dart-define=FIREBASE_API_KEY=AIzaSyD4RXH9Y_NZ84Uyk8S9pG3f0MAfqw43-58 \
             --dart-define=FIREBASE_APP_ID=1:1015453781744:web:5dc0778cc6f055f9b47c35 \
-            --dart-define=FIREBASE_VAPID_KEY=BBxjShomDqz-A37ul5EBCRCmrktpO80ohftoSeA3DVpsgk9R06f0UvMZJTbFGANDkkkz58PVMN1QloGMLF4MWCY
+            --dart-define=FIREBASE_VAPID_KEY=BBxjShomDqz-A37ul5EBCRCmrktpO80ohftoSeA3DVpsgk9R06f0UvMZJTbFGANDkkkz58PVMN1QloGMLF4MWCY \
+            --dart-define=DEMO_MODE=true
 
       - name: Configure Pages
         uses: actions/configure-pages@v5
