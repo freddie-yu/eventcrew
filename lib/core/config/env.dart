@@ -24,6 +24,8 @@ class Env {
       String.fromEnvironment('FIREBASE_STORAGE_BUCKET');
   static const String firebaseVapidKey =
       String.fromEnvironment('FIREBASE_VAPID_KEY');
+  static const bool demoMode =
+      bool.fromEnvironment('DEMO_MODE', defaultValue: false);
 
   static bool get isConfigured =>
       supabaseUrl.isNotEmpty && supabaseAnonKey.isNotEmpty;
