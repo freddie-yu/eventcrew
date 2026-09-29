@@ -1,0 +1,61 @@
+name: Generate Free EventCrew Voiceover
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - ".github/workflows/generate-free-voiceover.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download Piper
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -L --retry 3 -o piper.tar.gz             https://github.com/rhasspy/piper/releases/download/2023.11.14-2/piper_linux_x86_64.tar.gz
+          tar -xzf piper.tar.gz
+          curl -L --retry 3 -o voice.onnx             https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/hfc_female/medium/en_US-hfc_female-medium.onnx
+          curl -L --retry 3 -o voice.onnx.json             https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/hfc_female/medium/en_US-hfc_female-medium.onnx.json
+
+      - name: Generate segmented narration
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p voiceover
+
+          speak () {
+            local name="$1"
+            local text="$2"
+            printf '%s\n' "$text" | ./piper/piper               --model voice.onnx               --config voice.onnx.json               --output_file "voiceover/$name.wav"
+          }
+
+          speak 01_intro "EventCrew is a Flutter and Supabase staffing app designed around real event operations."
+          speak 02_signup "Workers can discover available shifts and join in just a few taps. Shift capacity is enforced on the server, so the final place cannot be double-booked."
+          speak 03_waitlist "When a shift is full, the next worker joins the waitlist. If a confirmed worker leaves, EventCrew automatically promotes the next person in line."
+          speak 04_attendance "Attendance is server-authoritative. Clock-in state is stored in PostgreSQL and stays consistent across navigation and reloads."
+          speak 05_chat "For teams on the same event, realtime chat keeps communication focused and secure, with staff identity scoped to shared events."
+          speak 06_push "Firebase Cloud Messaging delivers operational alerts, while service credentials stay safely on the backend through Supabase Edge Functions."
+          speak 07_engineering "Automated tests and continuous integration help catch regressions before deployment."
+          speak 08_outro "EventCrew shows how Flutter and Supabase can extend a real staffing product safely, incrementally, and reliably."
+
+          for f in voiceover/*.wav; do
+            ffmpeg -y -i "$f" -af "highpass=f=80,lowpass=f=12000,loudnorm=I=-18:TP=-2:LRA=7" "${f%.wav}_processed.wav"
+          done
+          rm voiceover/0[1-8]_*.wav
+          for f in voiceover/*_processed.wav; do
+            mv "$f" "${f/_processed/}"
+          done
+
+      - name: Upload narration
+        uses: actions/upload-artifact@v4
+        with:
+          name: eventcrew-natural-female-voiceover
+          path: voiceover/*.wav
+          if-no-files-found: error
+          retention-days: 1
