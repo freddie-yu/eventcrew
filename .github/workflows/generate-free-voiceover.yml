@@ -44,14 +44,6 @@ jobs:
           speak 07_engineering "Automated tests and continuous integration help catch regressions before deployment."
           speak 08_outro "EventCrew shows how Flutter and Supabase can extend a real staffing product safely, incrementally, and reliably."
 
-          for f in voiceover/*.wav; do
-            ffmpeg -y -i "$f" -af "highpass=f=80,lowpass=f=12000,loudnorm=I=-18:TP=-2:LRA=7" "${f%.wav}_processed.wav"
-          done
-          rm voiceover/0[1-8]_*.wav
-          for f in voiceover/*_processed.wav; do
-            mv "$f" "${f/_processed/}"
-          done
-
       - name: Upload narration
         uses: actions/upload-artifact@v4
         with:
