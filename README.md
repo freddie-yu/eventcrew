@@ -84,19 +84,6 @@ Trusted ops backend
 
 See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
-## Why this maps to an event-staffing role
-
-| Job need | Evidence in this repo |
-| --- | --- |
-| Strong Flutter | Feature-based UI, Riverpod, navigation, async/operational states |
-| Strong Supabase | Auth, RLS, RPCs, migrations, Realtime |
-| SQL/PostgreSQL | Constraints, indexes, triggers, locking, waitlist promotion |
-| Realtime | Event-scoped chat subscription with lifecycle cleanup |
-| Push notifications | FCM token lifecycle + trusted Edge Function dispatcher |
-| Existing-codebase work | Incremental features without replacing the architecture |
-| Reliability | Server-side invariants + unit/widget tests + CI |
-| UI/UX | Shared Figma/Flutter tokens and staffing-specific components |
-
 ## Run locally
 
 Requires **Flutter 3.27+ / Dart 3.6+** and Supabase.
@@ -140,17 +127,6 @@ NOTIFICATION_DISPATCH_SECRET
 ```
 
 Never place the Firebase service account in Flutter or in the repository.
-
-## Demo script
-
-1. Sign in.
-2. Join an event with open capacity and see **Confirmed**.
-3. Fill an event to capacity with other demo users; the next user joins as **Waitlisted**.
-4. Remove a confirmed user and verify the oldest waitlisted user is promoted.
-5. Clock in and reload; attendance persists from PostgreSQL.
-6. Open Team Chat from two users and verify names/roles + realtime inserts.
-7. With Firebase configured, register the device and dispatch a test shift alert
-   through the trusted Edge Function.
 
 ## Quality checks
 
